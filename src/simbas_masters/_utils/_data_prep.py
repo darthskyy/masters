@@ -31,15 +31,13 @@ import requests
 import zipfile
 import platform
 from pathlib import Path
+from ..paths import DATA_DIR
 
 # for extracting the data
 DIRS = ["TEST", "TRAIN"]
-OUT_NAME_FORMAT = "{0}_{1}.tsv"
 
 # for downloading the data
 URL = "https://repo.sadilar.org/bitstream/handle/20.500.12185/546/SADII_CTexT_2022-03-14.zip?sequence=4&isAllowed=y"
-OUT_DIR = "data"
-DATA_DIR = Path(__file__).parent.parent / "_data"  # Assuming the data directory is two levels up from this file
 BASE_DIR = DATA_DIR / "sadilar_raw"
 
 LANGUAGES = ["EN", "NR", "SS", "XH", "ZU"]
