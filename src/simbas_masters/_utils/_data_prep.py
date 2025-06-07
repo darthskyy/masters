@@ -21,15 +21,14 @@ Description:
         - word{tab}canonical_segmentation{tab}morphological_parse
     - The script skips the English files.
 """
+from collections import defaultdict
 
-import argparse
 import re
 import io
 import os
 import shutil
 import requests
 import zipfile
-import platform
 from pathlib import Path
 from ..paths import DATA_DIR
 
@@ -64,8 +63,6 @@ class SadilarDataPreparation:
         else:
             print(f"Creating directory {out_dir}...")
             os.makedirs(out_dir, exist_ok=True)
-
-        
 
         r = requests.get(source_url)
         content = io.BytesIO(r.content)
@@ -197,3 +194,66 @@ class SadilarDataPreparation:
         with open(out_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
         print(f"Reformatted\n\t{file_path} ->\n\t{out_path}")
+    
+    @staticmethod
+    def group_lines_from_file(file_path: Path | str) -> dict[str, list[str]]:
+        """
+        Processes a file and groups the text by line number.
+
+        This function expects the file to contain lines that start with "<LINE" followed by a line number.
+        It groups the text lines that follow each line number into a dictionary where the keys are the line numbers and the values are lists of text lines.
+        The function reads the file line by line, identifies the line numbers, and collects the corresponding text lines until the next line number is encountered.
+
+        Arguments:
+            file_path (str): The path to the file to process
+        Returns:
+            dict[str, list[str]]: A dictionary where the keys are line numbers and the values are lists of text lines
+        """
+        # Dictionary to group text by line number
+        line_groups = defaultdict(list)
+        file_path = Path(file_path)
+        
+        # Read the file
+        with open(file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+
+        curr_line = None
+        for line in lines:
+            line = line.rstrip()
+            if "<LINE" in line:
+                # Extract the line number
+                curr_line = line
+            elif curr_line is not None:
+                # Process the line and add it to the current line group
+                out_ = line.split("\t")[0]
+                line_groups[curr_line].append(out_)
+        
+        return line_groups
+
+    def sentencify(sentence_fragments: list[str]) -> str:
+        """
+        Joins the lines in a group into a single string based on punctuation rules.
+        
+        Args:
+            line_group (list): The group of lines to join
+        
+        Returns:
+            str: The joined string
+
+        Example:
+            >>> sentencify(["Hello", ",", "World", "!", "This", "is", "a", "test", "sentence", "."])
+            "Hello, World! This is a test sentence."
+        """
+        space_before_punct = ["!", "?", ".", ",", ";", ":", ")", "]", "}", "’", "”"]
+        space_after_punct = ["(", "[", "{", "‘", "“"]
+        space_before_after_punct = ["-", "_", "=", "+", "*", "/"]
+        line = " ".join(sentence_fragments)
+        line = re.sub(r"\s+", " ", line)  # Replace multiple spaces with a single space
+        
+        for punc in space_before_punct:
+            line = line.replace(f" {punc}", punc)
+        for punc in space_after_punct:
+            line = line.replace(f"{punc} ", punc)
+        for punc in space_before_after_punct:
+            line = line.replace(f" {punc} ", punc)
+        return line
