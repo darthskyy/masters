@@ -18,6 +18,7 @@ from modest.formats.tsv import iterateTsv
 from modest.interfaces.datasets import ModestDataset, M
 from modest.interfaces.morphologies import WordDecomposition, WordSegmentation
 
+## TYPE ALIASES and CONSTANTS
 # redefining Languageish here for clarity of what it is.
 Languageish = Union[langcodes.Language, str]
 
@@ -30,6 +31,33 @@ SOUTH_AFRICAN_LANGUAGES = {
 }
 
 BASE_DIR = "sadilar_morph_data" # This should be a default
+
+## EXCEPTIONS
+class SadilarMorphError(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class LanguageNotSupportedError(SadilarMorphError):
+    """Raised when an unsupported language is provided."""
+    def __init__(self, language: Languageish):
+        super().__init__(f"Language not supported by Sadilar Morphological Dataset: {language}")
+        self.language = language
+
+class DatasetFileNotFoundError(SadilarMorphError, FileNotFoundError):
+    """Raised when the dataset file for a given language/set_name is not found."""
+    def __init__(self, path: Path, language: Languageish, set_name: str):
+        super().__init__(f"Dataset file not found at {path} for language '{language}' and set_name '{set_name}'")
+        self.path = path
+        self.language = language
+        self.set_name = set_name
+
+class InvalidSetNameError(SadilarMorphError):
+    """Raised when an invalid set_name is provided."""
+    def __init__(self, set_name: str, allowed_values: Tuple[str, ...]):
+        super().__init__(f"Invalid set_name '{set_name}'. Allowed values are: {', '.join(allowed_values)}")
+        self.set_name = set_name
+        self.allowed_values = allowed_values
+
 
 ## CLASSES
 # NOTE: I am copying the format from the MODEST morphynet dataset in the MODEST repository.
@@ -108,6 +136,9 @@ class SadilarMorphDataset(ModestDataset[M]):
     A dataset class for the Sadilar Morphological Dataset.
     This class is designed to handle morphological data.
 
+    # NOTE: This class cannot be used directly, it is an abstract class.
+    It provides the base functionality for loading and generating morphological data for specific languages.
+
     Requires data to be in directory structure:
     BASEDIR/
         ├── surface/
@@ -123,20 +154,24 @@ class SadilarMorphDataset(ModestDataset[M]):
         _subset (str): The subset of the dataset, which is "inflectional" for this dataset.
     """
     
+    ALLOWED_SET_NAMES = ("surface", "canonical")
+
     def __init__(self, language: Languageish, set_name: str = None):
         super().__init__(name="SadilarMorph", language=language)
         self._subset = "inflectional"  # This dataset is focused on inflectional morphology
-        assert set_name in ["surface", "canonical"], "set_name must be either 'surface' or 'canonical'."
+        if set_name is not None and set_name not in self.ALLOWED_SET_NAMES:
+            raise InvalidSetNameError(set_name, self.ALLOWED_SET_NAMES)
         self._set_name = set_name
         self._sadilar_code = SOUTH_AFRICAN_LANGUAGES.get(self._language)
         if self._sadilar_code is None:
-            raise ValueError(f"Language not in Sadilar Morphological Dataset: {self._language}")
+            raise LanguageNotSupportedError(self._language)
     
     def _get(self) -> Path:
-        if self._set_name is None:
-            raise ValueError("Set name must be provided to access the dataset.")
         # Construct the path to the dataset based on the language code
-        return Path(f"{BASE_DIR}/{self._set_name}/{self._sadilar_code.upper()}.tsv")
+        file_path = Path(f"{BASE_DIR}/{self._set_name}/{self._sadilar_code.upper()}.tsv")
+        if not file_path.exists():
+            raise DatasetFileNotFoundError(file_path, self._language, self._set_name)
+        return file_path
     
 class SadilarMorphDataset_Surface(SadilarMorphDataset[SadilarMorphologySurface]):
     """
@@ -187,7 +222,13 @@ class SadilarMorphDataset_Surface(SadilarMorphDataset[SadilarMorphologySurface])
 
         seen = set()
         for parts in iterateTsv(path):
-            word, analysis = parts[0].lower(), parts[2]  # Assuming the third column is the surface form of the word
+            # NOTE: currently dealing with it as just skipping the line if it is malformed. Maybe this should be handled differently in the future (e.g. logging the error or raising an exception).
+            try:
+                word, analysis = parts[0].lower(), parts[2]  # Assuming the third column is the surface form of the word
+            except:
+                line = '\t'.join(parts)
+                print(f"WARNING: Bad SadilarMorph line: ##{line}##")
+                continue
             if word in seen:
                 continue
             seen.add(word)
@@ -243,7 +284,12 @@ class SadilarMorphDataset_Canonical(SadilarMorphDataset[SadilarMorphologyCanonic
 
         seen = set()
         for parts in iterateTsv(path):
-            word, analysis = parts[0].lower(), parts[2]
+            try:
+                word, analysis = parts[0].lower(), parts[2]
+            except:
+                line = '\t'.join(parts)
+                print(f"WARNING: Bad SadilarMorph line: ##{line}##")
+                continue
             if word in seen:
                 continue
             seen.add(word)
