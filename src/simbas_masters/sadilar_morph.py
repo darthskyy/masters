@@ -14,9 +14,15 @@ word{TAB}morph_analysis(morphs+tags){TAB}segmentation/surface_form{TAB}morpholog
 from typing import Iterator, Tuple, Union
 import langcodes
 from pathlib import Path
+import shutil
 from modest.formats.tsv import iterateTsv
 from modest.interfaces.datasets import ModestDataset, M
 from modest.interfaces.morphologies import WordDecomposition, WordSegmentation
+
+from ._utils._data_prep import SadilarDataPreparation
+download_sadilar = SadilarDataPreparation.download_and_extract_sadilar
+reformat_sadilar_file = SadilarDataPreparation.reformat_file
+from .paths import DATA_DIR
 
 ## TYPE ALIASES and CONSTANTS
 # redefining Languageish here for clarity of what it is.
@@ -30,8 +36,17 @@ SOUTH_AFRICAN_LANGUAGES = {
     langcodes.find("isiZulu"): "zu",
 }
 
-DATA_DIR = Path(__file__).parent.parent / "_data"  # Assuming the data directory is two levels up from this file
 BASE_DIR = DATA_DIR / "sadilar_morph_data"
+BUFFER_DIR = DATA_DIR / "buffer"
+
+# initializing the base directory structure
+if not BASE_DIR.exists():
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+# creating subdirectories for surface and canonical datasets
+for subdir in ["surface", "canonical"]:
+    sub_path = BASE_DIR / subdir
+    if not sub_path.exists():
+        sub_path.mkdir(parents=True, exist_ok=True)
 
 ## EXCEPTIONS
 class SadilarMorphError(Exception):
@@ -169,7 +184,10 @@ class SadilarMorphDataset(ModestDataset[M]):
     
     def _get(self) -> Path:
         # Construct the path to the dataset based on the language code
+        # checks for both .tsv and .txt files, as Sadilar Morphological Dataset has both formats.
         file_path = BASE_DIR / self._set_name / f"{self._sadilar_code.upper()}.tsv"
+        if not file_path.exists():
+            file_path = BASE_DIR / self._set_name / f"{self._sadilar_code.upper()}.txt"
         if not file_path.exists():
             raise DatasetFileNotFoundError(file_path, self._language, self._set_name)
         return file_path
@@ -263,8 +281,24 @@ class SadilarMorphDataset_Canonical(SadilarMorphDataset[SadilarMorphologyCanonic
         ezelulekayo ('ezi', 'lulek', 'a', 'yo')
     """
 
-    def __init__(self, language: Languageish):
+    def __init__(self, language: Languageish, download: bool = False):
         # Added set_name to the constructor to specify the type of dataset
+        if download:
+            # HACK: (kinda) because it has to download the entire dataset then just get the language specified.
+            language = langcodes.find(language)
+            if language not in SOUTH_AFRICAN_LANGUAGES:
+                raise LanguageNotSupportedError(language)
+            
+            # download the sadilar dataset to the buffer directory and combines both TRAIN and TEST sets into a single file.
+            if not BUFFER_DIR.exists():
+                BUFFER_DIR.mkdir(parents=True, exist_ok=True)
+            download_sadilar(out_dir=BUFFER_DIR, combine=True, overwrite=True)
+            reformat_sadilar_file(
+                file_path=BUFFER_DIR / "COMBINED" / f"{SOUTH_AFRICAN_LANGUAGES[language].upper()}.txt",
+                out_path=DATA_DIR / "sadilar_morph_data" / "canonical" / f"{SOUTH_AFRICAN_LANGUAGES[language].upper()}.tsv"
+            )
+            # delete the buffer directory after reformatting
+            shutil.rmtree(BUFFER_DIR, ignore_errors=True)
         super().__init__(language=language, set_name="canonical")
     
     def _generate(self, path: Path, **kwargs) -> Iterator[SadilarMorphologyCanonical]:
