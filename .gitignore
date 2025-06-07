@@ -1,0 +1,15 @@
+# environments (any directory that contains a with "env" in the name)
+*env*/
+
+# Python cache files
+__pycache__/
+
+# Python bytecode files
+*.py[cod]
+# Python egg files
+*.egg
+# Python distribution files
+*.egg-info/
+
+# playground files
+*playground*
