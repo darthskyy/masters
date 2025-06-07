@@ -110,7 +110,10 @@ class SadilarMorphDataset(ModestDataset[M]):
 
     Requires data to be in directory structure:
     BASEDIR/
-        └── {lang_code}.tsv
+        ├── surface/
+        │   └── {lang_code}.tsv
+        └── canonical/
+            └── {lang_code}.tsv
 
     where {lang_code} is the language code as per Sadilar's conventions.
 
@@ -120,16 +123,20 @@ class SadilarMorphDataset(ModestDataset[M]):
         _subset (str): The subset of the dataset, which is "inflectional" for this dataset.
     """
     
-    def __init__(self, language: Languageish):
+    def __init__(self, language: Languageish, set_name: str = None):
         super().__init__(name="SadilarMorph", language=language)
         self._subset = "inflectional"  # This dataset is focused on inflectional morphology
+        assert set_name in ["surface", "canonical"], "set_name must be either 'surface' or 'canonical'."
+        self._set_name = set_name
+        self._sadilar_code = SOUTH_AFRICAN_LANGUAGES.get(self._language)
+        if self._sadilar_code is None:
+            raise ValueError(f"Language not in Sadilar Morphological Dataset: {self._language}")
     
     def _get(self) -> Path:
-        sadilar_code = SOUTH_AFRICAN_LANGUAGES.get(self._language)
-        if sadilar_code is None:
-            raise ValueError(f"Language not in Sadilar Morphological Dataset: {self._language}")
+        if self._set_name is None:
+            raise ValueError("Set name must be provided to access the dataset.")
         # Construct the path to the dataset based on the language code
-        return Path(f"{BASE_DIR}/{sadilar_code.upper()}.tsv")
+        return Path(f"{BASE_DIR}/{self._set_name}/{self._sadilar_code.upper()}.tsv")
     
 class SadilarMorphDataset_Surface(SadilarMorphDataset[SadilarMorphologySurface]):
     """
@@ -157,6 +164,10 @@ class SadilarMorphDataset_Surface(SadilarMorphDataset[SadilarMorphologySurface])
         ezelulekayo ('eze', 'lulek', 'a', 'yo')
 
     """
+
+    def __init__(self, language: Languageish):
+        # Added set_name to the constructor to specify the type of dataset
+        super().__init__(language=language, set_name="surface")
     
     def _generate(self, path: Path, **kwargs) -> Iterator[SadilarMorphologySurface]:
         """
@@ -209,6 +220,10 @@ class SadilarMorphDataset_Canonical(SadilarMorphDataset[SadilarMorphologyCanonic
         ...     print(item.word, item.decompose())
         ezelulekayo ('ezi', 'lulek', 'a', 'yo')
     """
+
+    def __init__(self, language: Languageish):
+        # Added set_name to the constructor to specify the type of dataset
+        super().__init__(language=language, set_name="canonical")
     
     def _generate(self, path: Path, **kwargs) -> Iterator[SadilarMorphologyCanonical]:
         """
@@ -232,7 +247,7 @@ class SadilarMorphDataset_Canonical(SadilarMorphDataset[SadilarMorphologyCanonic
             if word in seen:
                 continue
             seen.add(word)
-            
+
             curr = SadilarMorphologyCanonical(word=word, analysis=analysis)
             if prev is None:
                 prev = curr
