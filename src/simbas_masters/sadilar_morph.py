@@ -30,7 +30,8 @@ SOUTH_AFRICAN_LANGUAGES = {
     langcodes.find("isiZulu"): "zu",
 }
 
-BASE_DIR = "sadilar_morph_data" # This should be a default
+DATA_DIR = Path(__file__).parent.parent / "_data"  # Assuming the data directory is two levels up from this file
+BASE_DIR = DATA_DIR / "sadilar_morph_data"
 
 ## EXCEPTIONS
 class SadilarMorphError(Exception):
@@ -168,7 +169,7 @@ class SadilarMorphDataset(ModestDataset[M]):
     
     def _get(self) -> Path:
         # Construct the path to the dataset based on the language code
-        file_path = Path(f"{BASE_DIR}/{self._set_name}/{self._sadilar_code.upper()}.tsv")
+        file_path = BASE_DIR / self._set_name / f"{self._sadilar_code.upper()}.tsv"
         if not file_path.exists():
             raise DatasetFileNotFoundError(file_path, self._language, self._set_name)
         return file_path
