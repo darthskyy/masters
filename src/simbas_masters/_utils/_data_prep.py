@@ -44,7 +44,7 @@ LANGUAGES = ["EN", "NR", "SS", "XH", "ZU"]
 
 class SadilarDataPreparation:
     @staticmethod
-    def download_and_extract_sadilar(source_url: str, out_dir: Path | str, clean_dir: bool = True, overwrite: bool = False, verbose: bool = False, combine: bool = False):
+    def download_and_extract_sadilar(source_url: str = URL, out_dir: Path | str = BASE_DIR, clean_dir: bool = True, overwrite: bool = False, verbose: bool = False, combine: bool = False):
         """
         Downloads a zip file and extracts it into a specified directory
 
@@ -150,14 +150,14 @@ class SadilarDataPreparation:
             >>> format_line("abanengi\taba[AdjPref2a]-nengi[AdjStem]\tnengi\tADJ02a")
             "abanengi\tnengi\taba_nengi\tAdjPref2a_AdjStem\tADJ02a"
         """
-
-        line = line.rstrip()
         if "<LINE#" in line:
             return line
+
+        line = line.rstrip()
         raw, parsed, lemma, pos = line.split("\t")
         segmentation, tags = SadilarDataPreparation.split_tags(parsed)
         line = [raw, lemma, "_".join(segmentation), "_".join(tags), pos]
-        return "\t".join(line)
+        return "\t".join(line) + "\n"
 
     def split_tags(text: str) -> tuple[list[str], list[str]]:
         """
