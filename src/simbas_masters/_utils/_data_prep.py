@@ -138,10 +138,12 @@ class SadilarDataPreparation:
         Removes the POS columns from the line then adds the separated canonical segmentation of the word and morphological tags.
 
         Arguments:
-            line (str): The line to format. word{tab}analysis/parsed{tab}{lemma}{tab}pos
+            line (str): The line to format:
+                word{tab}analysis/parsed{tab}lemma{tab}pos
 
         Returns:
-            str: The formatted line. {word}{tab}{lemma}{tab}{canonical_segmentation}{tab}{morpheme_tags}
+            str: The formatted line:
+                word{tab}lemma{tab}canonical_segmentation{tab}morpheme_tags
 
         Example:
             >>> format_line("abanengi\taba[AdjPref2a]-nengi[AdjStem]\tnengi\tADJ02a")
@@ -179,7 +181,10 @@ class SadilarDataPreparation:
     def reformat_file(file_path: Path | str, out_path: Path | str):
         """
         Reformats a file to the TSV format.
-
+        
+        Assumptions:
+            - input file is in the format:
+            word{tab}analysis/parsed{tab}lemma{tab}pos
         Arguments:
             file_path (str): The path to the file to reformat
             out_path (str): The path to the output file
@@ -196,10 +201,23 @@ class SadilarDataPreparation:
         print(f"Reformatted\n\t{file_path} ->\n\t{out_path}")
     
     @staticmethod
-    def group_lines_from_file(file_path: Path | str) -> dict[str, list[str]]:
+    def group_lines_from_file(file_path: Path | str) -> dict[str, list[tuple[str, str]]]:
         """
         Processes a file and groups the text by line number.
 
+        Assumptions:
+            - The file contains lines that start with "<LINE" followed by a line number.
+            - The input file has been format so that the lines are in the manner of:
+                "<LINE#1>
+                word1\tlemma1\tcanonical_segmentation1\tmorpheme1\tpos1\n
+                word2\tlemma2\tcanonical_segmentation2\tmorpheme2\tpos2\n
+                ...
+                <LINE#2>
+                word3\tlemma3\tcanonical_segmentation3\tmorpheme3\tpos3\n
+                word4\tlemma4\tcanonical_segmentation4\tmorpheme4\tpos4\n
+                ...
+                "
+        
         This function expects the file to contain lines that start with "<LINE" followed by a line number.
         It groups the text lines that follow each line number into a dictionary where the keys are the line numbers and the values are lists of text lines.
         The function reads the file line by line, identifies the line numbers, and collects the corresponding text lines until the next line number is encountered.
@@ -207,7 +225,7 @@ class SadilarDataPreparation:
         Arguments:
             file_path (str): The path to the file to process
         Returns:
-            dict[str, list[str]]: A dictionary where the keys are line numbers and the values are lists of text lines
+            dict[str, list[tuple[str, str]]]: A dictionary where the keys are line numbers and the values are lists of tuples containing the word and its morpheme
         """
         # Dictionary to group text by line number
         line_groups = defaultdict(list)
@@ -223,22 +241,25 @@ class SadilarDataPreparation:
             if "<LINE" in line:
                 # Extract the line number
                 curr_line = line
+                line_groups[curr_line] = ([], [])  # Initialize a new group for this line
             elif curr_line is not None:
                 # Process the line and add it to the current line group
-                out_ = line.split("\t")[0]
-                line_groups[curr_line].append(out_)
+                word = line.split("\t")[0]
+                morpheme = line.split("\t")[2]
+                line_groups[curr_line][0].append(word)
+                line_groups[curr_line][1].append(morpheme)
         
         return line_groups
 
     def sentencify(sentence_fragments: list[str]) -> str:
         """
-        Joins the lines in a group into a single string based on punctuation rules.
+        Joins a list of words and punctuation into a single string based on punctuation rules.
         
         Args:
-            line_group (list): The group of lines to join
+            sentence_fragments (list): A list of strings representing words and punctuation marks.
         
         Returns:
-            str: The joined string
+            str: A single string representing a sentence, with appropriate spacing around punctuation.
 
         Example:
             >>> sentencify(["Hello", ",", "World", "!", "This", "is", "a", "test", "sentence", "."])
