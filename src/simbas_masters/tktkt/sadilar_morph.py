@@ -19,10 +19,10 @@ from modest.formats.tsv import iterateTsv
 from modest.interfaces.datasets import ModestDataset, M
 from modest.interfaces.morphologies import WordDecomposition, WordSegmentation
 
-from ._utils._data_prep import SadilarDataPreparation
+from .._utils._data_prep import SadilarDataPreparation
 download_sadilar = SadilarDataPreparation.download_and_extract_sadilar
 reformat_sadilar_file = SadilarDataPreparation.reformat_file
-from .paths import DATA_DIR
+from ..paths import DATA_DIR
 
 ## TYPE ALIASES and CONSTANTS
 # redefining Languageish here for clarity of what it is.
