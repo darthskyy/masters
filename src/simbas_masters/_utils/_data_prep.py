@@ -225,7 +225,7 @@ class SadilarDataPreparation:
         Arguments:
             file_path (str): The path to the file to process
         Returns:
-            dict[str, list[tuple[str, str]]]: A dictionary where the keys are line numbers and the values are lists of tuples containing the word and its morpheme
+            dict[str, list[tuple[str, str]]]: A dictionary where the keys are line numbers and the values are lists of tuples containing words and their corresponding morphemes (index 0 and 1 of the tuple respectively).
         """
         # Dictionary to group text by line number
         line_groups = defaultdict(list)
@@ -251,12 +251,13 @@ class SadilarDataPreparation:
         
         return line_groups
 
-    def sentencify(sentence_fragments: list[str]) -> str:
+    def sentencify(sentence_fragments: list[str], ignore_punctuation: bool = False) -> str:
         """
         Joins a list of words and punctuation into a single string based on punctuation rules.
         
         Args:
             sentence_fragments (list): A list of strings representing words and punctuation marks.
+            ignore_punctuation (bool): If True, punctuation will not be processed and will be included as is.
         
         Returns:
             str: A single string representing a sentence, with appropriate spacing around punctuation.
@@ -265,16 +266,59 @@ class SadilarDataPreparation:
             >>> sentencify(["Hello", ",", "World", "!", "This", "is", "a", "test", "sentence", "."])
             "Hello, World! This is a test sentence."
         """
+        line = " ".join(sentence_fragments)
+        line = re.sub(r"\s+", " ", line)  # Replace multiple spaces with a single space
+        if ignore_punctuation:
+            return line.strip()
+        
         space_before_punct = ["!", "?", ".", ",", ";", ":", ")", "]", "}", "’", "”"]
         space_after_punct = ["(", "[", "{", "‘", "“"]
         space_before_after_punct = ["-", "_", "=", "+", "*", "/"]
-        line = " ".join(sentence_fragments)
-        line = re.sub(r"\s+", " ", line)  # Replace multiple spaces with a single space
-        
         for punc in space_before_punct:
             line = line.replace(f" {punc}", punc)
         for punc in space_after_punct:
             line = line.replace(f"{punc} ", punc)
         for punc in space_before_after_punct:
             line = line.replace(f" {punc} ", punc)
-        return line
+        return line.strip()
+
+    @staticmethod
+    def sentencify_file(file_path: Path | str):
+        """
+        Reads a file, processes it to join sentence fragments into complete sentences, and writes the result back a
+        
+        Args:
+            file_path (Path | str): The path to the file to process.
+        
+        Assumptions:
+            - The file contains lines that start with "<LINE" followed by a line number.
+            - The input file has been formatted so that the lines are in the manner of:
+                "<LINE#1>
+                word1\tlemma1\tcanonical_segmentation1\tmorpheme1\tpos1\n
+                word2\tlemma2\tcanonical_segmentation2\tmorpheme2\tpos2\n
+                ...
+                "
+        Returns:
+            None: The function creates two new files in the same directory as the input file:
+            - One file containing sentences formed from the words.
+            - Another file containing sentences formed from the morphemes.
+        """
+
+        file_path = Path(file_path)
+        suffix = file_path.suffix
+        stem = file_path.stem
+
+        line_groups = SadilarDataPreparation.group_lines_from_file(file_path)
+        word_sentences = [SadilarDataPreparation.sentencify(line_groups[line][0]) + "\n" for line in line_groups if len(line_groups[line]) > 0]
+        # NOTE: We sentencify morphemes but without since they are meant to represent segmentation/tokens, not sentences.
+        morpheme_sentences = [SadilarDataPreparation.sentencify(line_groups[line][1], True) + "\n" for line in line_groups if len(line_groups[line]) > 0]
+
+        sentence_file_path = file_path.parent / f"{stem}_sentences{suffix}"
+        with open(sentence_file_path, "w", encoding="utf-8") as f:
+            f.writelines(word_sentences)
+
+        morpheme_file_path = file_path.parent / f"{stem}_morphemes{suffix}"
+        with open(morpheme_file_path, "w", encoding="utf-8") as f:
+            f.writelines(morpheme_sentences)
+            
+        print(f"Processed sentences and morphemes from {file_path} into:\n\t{sentence_file_path}\n\t{morpheme_file_path}")
