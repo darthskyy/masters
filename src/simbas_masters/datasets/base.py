@@ -1,9 +1,11 @@
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from abc import ABC, abstractmethod
+from typing import Iterator, List, Optional, Union, Tuple
 from ..paths import DATA_DIR
+from pathlib import Path
 
-class TokenizerTrainingDataset:
-    """Base class for tokenizer training datasets."""
+class TokeniserTrainingDataset:
+    """Base class for tokeniser training datasets."""
     
     def __init__(self, 
                  language_code: str,
@@ -13,7 +15,7 @@ class TokenizerTrainingDataset:
                  max_lines_per_file: Optional[int] = -1,
                  ):
         """
-        Initialize a tokenizer training dataset.
+        Initialize a tokeniser training dataset.
         
         Arguments:
             language_code: Language code (zu, xh, nr, ss)
@@ -85,12 +87,140 @@ class TokenizerTrainingDataset:
         print(f"Processed data saved to {output_path}")
 
     def __repr__(self) -> str:
-        return f"TokenizerTrainingDataset(language_code={self.language_code}, path={self.data_path}, max_files={self.max_files}, max_lines_per_file={self.max_lines_per_file})"
+        return f"TokeniserTrainingDataset(language_code={self.language_code}, path={self.data_path}, max_files={self.max_files}, max_lines_per_file={self.max_lines_per_file})"
     def __str__(self) -> str:
-        return f"TokenizerTrainingDataset for {self.language_code} at {self.data_path} with max_files={self.max_files} and max_lines_per_file={self.max_lines_per_file}"
+        return f"TokeniserTrainingDataset for {self.language_code} at {self.data_path} with max_files={self.max_files} and max_lines_per_file={self.max_lines_per_file}"
     def __len__(self) -> int:
         """Return the number of lines in the dataset."""
         return sum(1 for _ in self.iter_lines())
     def __iter__(self) -> Iterator[str]:
         """Iterate over all lines in the dataset."""
         return self.iter_lines()
+
+class TokenRef:
+    """Base class for token references."""
+    trunc_chars = 50
+    def __init__(self, text: str, tokens: List[str]):
+        self.text = text
+        self.tokens = tokens
+    
+    def produce(self) -> Tuple[str, List[str]]:
+        """Return the text and tokens as a tuple."""
+        return self.text, self.tokens
+    
+    def __repr__(self) -> str:
+        text = self.text[:self.trunc_chars] + "..." if len(self.text) > self.trunc_chars else self.text
+        tokens_str = str(self.tokens)
+        if len(tokens_str) > self.trunc_chars:
+            tokens_str = tokens_str[:self.trunc_chars] + "..."
+        return f"TokenRef(text={text!r}, tokens={tokens_str})"
+    
+    def __str__(self) -> str:
+        text = self.text[:self.trunc_chars] + "..." if len(self.text) > self.trunc_chars else self.text
+        tokens_repr = ", ".join(self.tokens)
+        if len(tokens_repr) > self.trunc_chars:
+            tokens_repr = tokens_repr[:self.trunc_chars] + "..."
+        return f"TokenRef: {text} -> {tokens_repr}"
+    
+    def __len__(self) -> int:
+        return len(self.tokens)
+    
+    def __iter__(self):
+        return iter(self.tokens)
+
+class TokeniserEvaluationDatasetBase(ABC, TokenRef):
+    """Base class for tokeniser evaluation datasets."""
+    
+    def __init__(self, language_code: str):
+        self.language_code = language_code
+    
+    @abstractmethod
+    def _validate(self):
+        """Validate the dataset files exist and are accessible."""
+        pass
+
+    @abstractmethod
+    def generate(self, **kwargs) -> Iterator[TokenRef]:
+        """Generate tokenised objects from the dataset."""
+        pass
+
+    def __iter__(self) -> Iterator[TokenRef]:
+        """Iterate over tokenised objects."""
+        return self.generate()
+    
+    def evaluate_tokeniser(self, tokenise_func, eval_func):
+        """
+        Evaluate a tokeniser against this dataset.
+        Arguments:
+            tokenise_func: Function to apply for tokenisation
+                - takes a single argument: text to be tokenised and returns a list of tokens
+            eval_func: Function to evaluate the tokenised output
+                - takes two arguments: expected tokens and tokenised output
+        Returns:
+            [dict[str, dict]]: A list of dictionaries containing evaluation results for each tokenisation.
+            e.g.
+        """
+        results = []
+        for token_ref in self.generate():
+            text, tokens = token_ref.produce()
+            tokenised_output = tokenise_func(text)
+            score = eval_func(tokens, tokenised_output)
+            results.append(
+                {
+                    "text": text,
+                    "expected_tokens": tokens,
+                    "tokenised_output": tokenised_output,
+                    "score": score
+                }
+            )
+        return results
+
+class TokeniserEvalutionDataset(TokeniserEvaluationDatasetBase):
+    """
+    Concrete class for tokeniser evaluation datasets (from my expectations)
+    
+    Arguments:
+        language_code (str): Language code (zu, xh, nr, ss)
+        ref_path (Path | str): Path to the reference file
+        token_path (Path | str): Path to the tokenised file
+
+    """
+    
+    def __init__(self, language_code: str, ref_path: Path | str, token_path: Path | str, token_separator: str = "_"):
+        super().__init__(language_code)
+        self.ref_path = Path(ref_path)
+        self.token_path = Path(token_path)
+        self.token_separator = token_separator
+    
+    @classmethod
+    def from_contained(cls, language_code: str, path: Path | str, token_separator: str = "_") -> 'TokeniserEvalutionDataset':
+        """
+        Create a TokeniserEvalutionDataset from a contained path.
+        
+        Arguments:
+            language_code (str): Language code (zu, xh, nr, ss)
+            path (Path | str): Path to the dataset directory
+        """
+        return cls(language_code, 
+                   ref_path=Path(path) / f"{language_code}_ref.txt", 
+                   token_path=Path(path) / f"{language_code}_token.txt",
+                   token_separator=token_separator)
+    
+    def _validate(self):
+        """Load the dataset from the specified path."""
+        if not self.ref_path.exists():
+            raise FileNotFoundError(f"Reference file not found: {self.ref_path}")
+        if not self.token_path.exists():
+            raise FileNotFoundError(f"Tokenised file not found: {self.token_path}")
+    
+    def generate(self, **kwargs) -> Iterator[TokenRef]:
+        """Generate tokenised objects from the dataset."""
+        self._validate()
+        
+        with open(self.ref_path, 'r', encoding='utf-8') as ref_file, \
+             open(self.token_path, 'r', encoding='utf-8') as token_file:
+            for ref_line, token_line in zip(ref_file, token_file):
+                ref_text = ref_line.strip()
+                tokens = token_line.strip().replace(self.token_separator, " ").split()
+                if ref_text and tokens:
+                    yield TokenRef(text=ref_text, tokens=tokens)
