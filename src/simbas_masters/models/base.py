@@ -5,7 +5,7 @@ from ..datasets.base import TokeniserTrainingDataset
 
 # the supported tokeniser implementations
 # for each tokenisation algorithm
-SUPPORTED_IMPLEMENTATIONS = {
+SUPPORTED_ALGORITHMS = {
     "bpe": # [ ] first to be implemented
         (
             "huggingface",
@@ -106,11 +106,12 @@ class GenericTokeniser(ABC):
         Raises:
             ValueError: If the implementation or algorithm is not supported.
         """
-        if implementation not in SUPPORTED_IMPLEMENTATIONS.get(algorithm, []):
+        if algorithm not in SUPPORTED_ALGORITHMS:
+            raise ValueError(f"Unsupported algorithm '{algorithm}' for implementation '{implementation}'")
+        
+        if implementation not in SUPPORTED_ALGORITHMS[algorithm]:
             raise ValueError(f"Unsupported implementation '{implementation}' for algorithm '{algorithm}'")
         
-        if algorithm not in SUPPORTED_IMPLEMENTATIONS[implementation]:
-            raise ValueError(f"Unsupported algorithm '{algorithm}' for implementation '{implementation}'")
 
         self.implementation = implementation
         self.algorithm = algorithm
