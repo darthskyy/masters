@@ -28,6 +28,7 @@ import io
 import os
 import shutil
 import requests
+import tqdm
 import zipfile
 from pathlib import Path
 from ..paths import DATA_DIR
@@ -283,7 +284,7 @@ class SadilarDataPreparation:
         return line.strip()
 
     @staticmethod
-    def sentencify_file(file_path: Path | str):
+    def sentencify_file(file_path: Path | str, progress: bool = True):
         """
         Reads a file, processes it to join sentence fragments into complete sentences, and writes the result back a
         
@@ -309,10 +310,31 @@ class SadilarDataPreparation:
         stem = file_path.stem
 
         line_groups = SadilarDataPreparation.group_lines_from_file(file_path)
-        word_sentences = [SadilarDataPreparation.sentencify(line_groups[line][0]) + "\n" for line in line_groups if len(line_groups[line]) > 0]
-        # NOTE: We sentencify morphemes but without since they are meant to represent segmentation/tokens, not sentences.
-        morpheme_sentences = [SadilarDataPreparation.sentencify(line_groups[line][1], True) + "\n" for line in line_groups if len(line_groups[line]) > 0]
+        # Create sentences from the words in each line group
+        word_sentences = []
+        morpheme_sentences = []
+        
+        if progress:
+            iter_ = tqdm.tqdm(line_groups.items(), desc="Processing lines", unit="line")
+        else:
+            iter_ = line_groups.items()
+        for line_id, line in iter_:
+            if len(line_groups) > 0:
+                # Process words into proper sentences with punctuation handling
+                words = line[0]
+                words = [decapitalise(word, separator="-") for word in words]  # Decapitalise words
+                # HACK: unhyphenate words that are hyphenated
+                words = [word.replace("-", "") for word in words]
+                word_sentence = SadilarDataPreparation.sentencify(words)
+                word_sentences.append(word_sentence + "\n")
+                
+                # Process morphemes (treating them as tokens without punctuation rules)
+                morphemes = line[1]
+                morphemes = [decapitalise(morpheme, separator="_") for morpheme in morphemes]
+                morpheme_sentence = SadilarDataPreparation.sentencify(morphemes, ignore_punctuation=True)
+                morpheme_sentences.append(decapitalise(morpheme_sentence, separator="_") + "\n")
 
+        # Write the sentences to new files
         sentence_file_path = file_path.parent / f"{stem}_sentences{suffix}"
         with open(sentence_file_path, "w", encoding="utf-8") as f:
             f.writelines(word_sentences)
@@ -320,5 +342,42 @@ class SadilarDataPreparation:
         morpheme_file_path = file_path.parent / f"{stem}_morphemes{suffix}"
         with open(morpheme_file_path, "w", encoding="utf-8") as f:
             f.writelines(morpheme_sentences)
-            
+        
         print(f"Processed sentences and morphemes from {file_path} into:\n\t{sentence_file_path}\n\t{morpheme_file_path}")
+
+
+# auxiliary function to decapitalise words
+def decapitalise(word: str, separator: str = "-") -> str:
+    """
+    Decapitalises a word, handling hyphenated words by decapitalising each part
+    except for those that are fully uppercase.
+    Args:
+        word (str): The word to decapitalise.
+        separator (str): The separator used in hyphenated words. Default is '-'.
+    Returns:
+        str: The decapitalised word.
+    Example:
+        >>> decapitalise("Burger-King")
+        'burger-king'
+        >>> decapitalise("the-WHO-Organization")
+        'the-who-organization'
+        >>> decapitalise("A-B-C")
+        'a-b-c'
+        >>> decapitalise("A")
+        'a'
+    """
+
+    # short-circuit for non-hyphenated words
+    if separator not in word:
+        if word.isupper() and len(word) > 1:
+            return word
+        else:
+            return word.lower()
+
+    parts = word.split(separator)
+    for i, part in enumerate(parts):
+        if part.isupper():
+            continue
+        else:
+            parts[i] = part.lower()
+    return separator.join(parts)
