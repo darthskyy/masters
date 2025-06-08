@@ -272,4 +272,3 @@ class GenericTokeniser(ABC):
             "is_trained": self._is_trained,
             "vocab": self.vocab.token_to_id,
         }
-    
