@@ -103,130 +103,91 @@ class TokeniserTrainingDataset:
         """Iterate over all lines in the dataset."""
         return self.iter_lines()
 
-class TokenRef:
-    """Base class for token references."""
-    trunc_chars = 50
-    def __init__(self, text: str, tokens: List[str]):
-        self.text = text
-        self.tokens = tokens
-    
-    def produce(self) -> Tuple[str, List[str]]:
-        """Return the text and tokens as a tuple."""
-        return self.text, self.tokens
-    
-    def __repr__(self) -> str:
-        text = self.text[:self.trunc_chars] + "..." if len(self.text) > self.trunc_chars else self.text
-        tokens_str = str(self.tokens)
-        if len(tokens_str) > self.trunc_chars:
-            tokens_str = tokens_str[:self.trunc_chars] + "..."
-        return f"TokenRef(text={text!r}, tokens={tokens_str})"
-    
-    def __str__(self) -> str:
-        text = self.text[:self.trunc_chars] + "..." if len(self.text) > self.trunc_chars else self.text
-        tokens_repr = ", ".join(self.tokens)
-        if len(tokens_repr) > self.trunc_chars:
-            tokens_repr = tokens_repr[:self.trunc_chars] + "..."
-        return f"TokenRef: {text} -> {tokens_repr}"
-    
-    def __len__(self) -> int:
-        return len(self.tokens)
-    
-    def __iter__(self):
-        return iter(self.tokens)
-
-class TokeniserEvaluationDatasetBase(ABC, TokenRef):
-    """Base class for tokeniser evaluation datasets."""
-    
-    def __init__(self, language_code: str):
-        self.language_code = language_code
-    
-    @abstractmethod
-    def _validate(self):
-        """Validate the dataset files exist and are accessible."""
-        pass
-
-    @abstractmethod
-    def generate(self, **kwargs) -> Iterator[TokenRef]:
-        """Generate tokenised objects from the dataset."""
-        pass
-
-    def __iter__(self) -> Iterator[TokenRef]:
-        """Iterate over tokenised objects."""
-        return self.generate()
-    
-    def evaluate_tokeniser(self, tokenise_func, eval_func):
-        """
-        Evaluate a tokeniser against this dataset.
-        Arguments:
-            tokenise_func: Function to apply for tokenisation
-                - takes a single argument: text to be tokenised and returns a list of tokens
-            eval_func: Function to evaluate the tokenised output
-                - takes two arguments: expected tokens and tokenised output
-        Returns:
-            [dict[str, dict]]: A list of dictionaries containing evaluation results for each tokenisation.
-            e.g.
-        """
-        results = []
-        for token_ref in self.generate():
-            text, tokens = token_ref.produce()
-            tokenised_output = tokenise_func(text)
-            score = eval_func(tokens, tokenised_output)
-            results.append(
-                {
-                    "text": text,
-                    "expected_tokens": tokens,
-                    "tokenised_output": tokenised_output,
-                    "score": score
-                }
-            )
-        return results
-
-class TokeniserEvalutionDataset(TokeniserEvaluationDatasetBase):
+class EvaluationDataset:
     """
-    Concrete class for tokeniser evaluation datasets (from my expectations)
-    
+    Simple class for simple binary evaluation datasets.
     Arguments:
         language_code (str): Language code (zu, xh, nr, ss)
-        ref_path (Path | str): Path to the reference file
-        token_path (Path | str): Path to the tokenised file
+        token_ref_path (Path | str): Path to the tokenised reference file
+        token_pred_path (Path | str): Path to the tokenised prediction file
+        token_separator (str): Separator used in the tokenised file (default is "_")
+        metric: Evaluation metric function to use (default is None)
+            - should take two arguments: expected tokens and predicted tokens, in that order
+            - should return a dictionary with evaluation results
 
     """
-    
-    def __init__(self, language_code: str, text_path: Path | str, token_ref_path: Path | str, token_separator: str = "_"):
-        super().__init__(language_code)
-        self.text_path = Path(text_path)
+    def __init__(self,
+                 language_code: str,
+                 token_ref_path: Union[str, Path],
+                 token_pred_path: Union[str, Path],
+                 token_separator: str = "_",
+                 metric = None,
+                 ):
+        self.language_code = language_code
         self.token_ref_path = Path(token_ref_path)
+        self.token_pred_path = Path(token_pred_path)
         self.token_separator = token_separator
+        self.metric = metric
+        
+        self._validate()
+
+    def _validate(self):
+        """Validate the dataset files exist and are accessible."""
+        if not self.token_ref_path.exists():
+            raise FileNotFoundError(f"Reference file not found: {self.token_ref_path}")
+        if not self.token_pred_path.exists():
+            raise FileNotFoundError(f"Prediction file not found: {self.token_pred_path}")
     
     @classmethod
-    def from_contained(cls, language_code: str, path: Path | str, token_separator: str = "_") -> 'TokeniserEvalutionDataset':
+    def from_contained(cls, language_code: str, path: Union[str, Path], token_separator: str = "_", metric = None) -> 'EvaluationDataset':
         """
-        Create a TokeniserEvalutionDataset from a contained path.
+        Create an EvaluationDataset from a contained path.
         
         Arguments:
             language_code (str): Language code (zu, xh, nr, ss)
             path (Path | str): Path to the dataset directory
+                - should contain files named "{language_code}_ref.txt" and "{language_code}_pred.txt"
+            token_separator (str): Separator used in the tokenised file (default is "_")
+            metric: Evaluation metric function to use (default is None)
+                - should take two arguments: expected tokens and predicted tokens, in that order
+                - should return a dictionary with evaluation results
         """
-        return cls(language_code, 
-                   ref_path=Path(path) / f"{language_code}_ref.txt", 
-                   token_path=Path(path) / f"{language_code}_token.txt",
-                   token_separator=token_separator)
-    
-    def _validate(self):
-        """Load the dataset from the specified path."""
-        if not self.text_path.exists():
-            raise FileNotFoundError(f"Reference file not found: {self.text_path}")
-        if not self.token_ref_path.exists():
-            raise FileNotFoundError(f"Tokenised file not found: {self.token_ref_path}")
-    
-    def generate(self, **kwargs) -> Iterator[TokenRef]:
-        """Generate tokenised objects from the dataset."""
-        self._validate()
+        return cls(
+            language_code, 
+            token_ref_path=Path(path) / f"{language_code}_ref.txt", 
+            token_pred_path=Path(path) / f"{language_code}_pred.txt",
+            token_separator=token_separator,
+            metric=metric
+            )
+
+    def evaluate(self):
+        """
+        Evaluate the tokenised predictions against the reference tokens.
         
-        with open(self.text_path, 'r', encoding='utf-8') as text_file, \
-             open(self.token_ref_path, 'r', encoding='utf-8') as token_file:
-            for line, token_line in zip(text_file, token_file):
-                ref_text = line.strip()
-                tokens = token_line.strip().replace(self.token_separator, " ").split()
-                if ref_text and tokens:
-                    yield TokenRef(text=ref_text, tokens=tokens)
+        Returns:
+            List[dict]: A list of dictionaries containing evaluation results for each tokenisation.
+            Each dictionary contains:
+                - "expected_tokens": List of expected tokens from the reference file
+                - "predicted_tokens": List of predicted tokens from the prediction file
+                - "score": Evaluation score calculated by the metric function
+        Raises:
+            ValueError: If no evaluation metric is provided.
+        """
+        if self.metric is None:
+            raise ValueError("No evaluation metric provided. Please set a metric function.")
+        results = []
+        with open(self.token_ref_path, 'r', encoding='utf-8') as ref_file, \
+             open(self.token_pred_path, 'r', encoding='utf-8') as pred_file:
+            for ref_line, pred_line in zip(ref_file, pred_file):
+                ref_tokens = ref_line.strip().split(self.token_separator)
+                pred_tokens = pred_line.strip().split(self.token_separator)
+                
+                if ref_tokens and pred_tokens:
+                    score = self.metric(ref_tokens, pred_tokens)
+                    results.append({
+                        "expected_tokens": ref_tokens,
+                        "predicted_tokens": pred_tokens,
+                        "score": score
+                    })
+        return results
+    
