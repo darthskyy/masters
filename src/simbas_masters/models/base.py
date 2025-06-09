@@ -44,11 +44,14 @@ class Vocab:
         _next_id (int): The next available ID for a new token.
     """
 
-    def __init__(self):
-        self._token_to_id = {}
-        self._id_to_token = {}
-        self._special_tokens = {}
-        self._next_id = 0
+    def __init__(self, token_to_id: dict[str, int] | None = None):
+        if token_to_id is None:
+            token_to_id = {}
+        self._token_to_id = token_to_id
+        self._id_to_token = {v: k for k, v in token_to_id.items()}
+        self._next_id = max(self._token_to_id.values(), default=-1) + 1
+        self._special_tokens = {}  # Not used in this implementation, but can be extended later
+        self._next_id = max(self._token_to_id.values(), default=-1) + 1        
     
     def add_token(self, token: str) -> int:
         """Add a token and return its ID"""
@@ -77,7 +80,7 @@ class Vocab:
     def token_to_id(self) -> dict:
         return self._token_to_id.copy()
 
-class Tokenisation:
+class Encoding:
     """
     A simple class to represent a tokenisation operation.
     This class is used to encapsulate the tokenised text and its corresponding IDs.
@@ -88,9 +91,10 @@ class Tokenisation:
         ids (list[int]): The list of IDs corresponding to the tokens.
     """
 
-    def __init__(self, tokens: list[str], ids: list[int]):
+    def __init__(self, tokens: list[str], ids: list[int], offsets: list[tuple[int, int]] | None = None):
         self.tokens = tokens
         self.ids = ids
+        self.offsets = offsets
     
     def __len__(self) -> int:
         """Return the number of tokens in the tokenisation."""
@@ -106,7 +110,7 @@ class Tokenisation:
 # - Tokenisation object
 # - list of strings (tokens)
 # - list of integers (IDs)
-type TokenisationType = Union[Tokenisation, list[str], list[int]]
+type EncodingType = Union[Encoding, list[str], list[int]]
 
 class GenericTokeniser(ABC):
     """
@@ -204,7 +208,7 @@ class GenericTokeniser(ABC):
     #     pass
     
     @abstractmethod
-    def encode(self, text: str) -> TokenisationType:
+    def encode(self, text: str) -> EncodingType:
         """
         Encode the input text into tokens.
 
@@ -216,7 +220,7 @@ class GenericTokeniser(ABC):
         """
     
     @abstractmethod
-    def decode(self, tokens: TokenisationType) -> str:
+    def decode(self, tokens: EncodingType) -> str:
         """
         Decode the list of tokens back into text.
 
@@ -298,6 +302,30 @@ class GenericTokeniser(ABC):
             Vocab: The vocabulary object containing token to ID mappings.
         """
         return self.vocab
+    
+    def get_ids(self, tokens: list[str]) -> list[int]:
+        """
+        Get the IDs for a list of tokens.
+
+        Args:
+            tokens (list[str]): A list of tokens to get IDs for.
+
+        Returns:
+            list[int]: A list of IDs corresponding to the input tokens.
+        """
+        return [self.vocab.get_id(token) for token in tokens]
+    
+    def get_tokens(self, ids: list[int]) -> list[str]:
+        """
+        Get the tokens for a list of IDs.
+
+        Args:
+            ids (list[int]): A list of IDs to get tokens for.
+
+        Returns:
+            list[str]: A list of tokens corresponding to the input IDs.
+        """
+        return [self.vocab.get_token(id) for id in ids]
     
     @property
     def vocab_size(self) -> int:
