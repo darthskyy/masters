@@ -306,8 +306,63 @@ class GenericTokeniser(ABC):
             raise ValueError("The tokeniser has not been trained yet.")
         
         token_batches = self.batch_encode(texts)
-        return [self.tokenise(text, separator) for text in token_batches]
+        if token_batches is None or len(token_batches) == 0:
+            return []
+        if not isinstance(token_batches, list):
+            raise TypeError("The batch_encode method should return a list of Encodings or lists of tokens/IDs.")
+        if all(isinstance(batch, Encoding) for batch in token_batches):
+            # If all batches are Encoding objects, extract tokens
+            token_batches = [batch.tokens for batch in token_batches]
+        elif all(isinstance(batch, list) for batch in token_batches):
+            # If all batches are lists, check their content
+            if all(isinstance(token, str) for token in token_batches[0]):
+                # If tokens are strings, do nothing
+                pass
+            elif all(isinstance(token, int) for token in token_batches[0]):
+                # If tokens are IDs, convert them to strings
+                token_batches = [self.get_tokens(batch) for batch in token_batches]
+            else:
+                raise TypeError("Unexpected type in the list of tokens. All elements should be either strings or integers.")
+        else:
+            raise TypeError("The batch_encode method should return a list of Encodings or lists of tokens/IDs.")
+        return [separator.join(batch) for batch in token_batches]
 
+    def tokenise_file(self, file_path: Path | str, separator: str = " ", by_line: bool = True, save_file: bool = False) -> list[str]:
+        """
+        Tokenise the contents of a file.
+
+        Args:
+            path (Union[str, Path]): The path to the file to be tokenised.
+            separator (str): The separator to use between tokens (default is " ").
+            by_line (bool): If True, tokenises each line separately; if False, tokenises the entire file as one string.
+
+        Returns:
+            list[str]: A list of tokenised strings.
+                - If by_line is True, each element corresponds to a line in the file.
+                - If by_line is False, there is only one element containing the tokenised content of the entire file.
+        """
+        if not self.is_trained():
+            raise ValueError("The tokeniser has not been trained yet.")
+        
+        file_path = Path(file_path)
+        with open(file_path, 'r', encoding='utf-8') as file:
+            if by_line:
+                lines = [line.strip() for line in file if line.strip()]  # Read lines and strip whitespace
+                out = self.batch_tokenise(lines, separator)
+                fix_line = lambda x: x + "\n" if not x.endswith("\n") else x
+                out = [fix_line(line) for line in out]
+            else:
+                content = [file.read().strip()]
+                out = [self.tokenise(content, separator) + "\n"]
+        
+        if save_file:
+            input_suffix = file_path.suffix
+            output_path = file_path.with_suffix(f".tokenised{input_suffix}")
+            with open(output_path, 'w', encoding='utf-8') as out_file:
+                out_file.writelines(out)
+        
+        return out
+        
     def is_trained(self) -> bool:
         """
         Check if the tokeniser has been trained.
