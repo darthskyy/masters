@@ -1,6 +1,6 @@
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Iterator, List, Optional, Union, Tuple
+from typing import Iterator, List, Optional, Union, Tuple, Iterable
 from ..paths import DATA_DIR
 from pathlib import Path
 
@@ -192,10 +192,10 @@ class TokeniserEvalutionDataset(TokeniserEvaluationDatasetBase):
 
     """
     
-    def __init__(self, language_code: str, ref_path: Path | str, token_path: Path | str, token_separator: str = "_"):
+    def __init__(self, language_code: str, text_path: Path | str, token_ref_path: Path | str, token_separator: str = "_"):
         super().__init__(language_code)
-        self.ref_path = Path(ref_path)
-        self.token_path = Path(token_path)
+        self.text_path = Path(text_path)
+        self.token_ref_path = Path(token_ref_path)
         self.token_separator = token_separator
     
     @classmethod
@@ -214,19 +214,19 @@ class TokeniserEvalutionDataset(TokeniserEvaluationDatasetBase):
     
     def _validate(self):
         """Load the dataset from the specified path."""
-        if not self.ref_path.exists():
-            raise FileNotFoundError(f"Reference file not found: {self.ref_path}")
-        if not self.token_path.exists():
-            raise FileNotFoundError(f"Tokenised file not found: {self.token_path}")
+        if not self.text_path.exists():
+            raise FileNotFoundError(f"Reference file not found: {self.text_path}")
+        if not self.token_ref_path.exists():
+            raise FileNotFoundError(f"Tokenised file not found: {self.token_ref_path}")
     
     def generate(self, **kwargs) -> Iterator[TokenRef]:
         """Generate tokenised objects from the dataset."""
         self._validate()
         
-        with open(self.ref_path, 'r', encoding='utf-8') as ref_file, \
-             open(self.token_path, 'r', encoding='utf-8') as token_file:
-            for ref_line, token_line in zip(ref_file, token_file):
-                ref_text = ref_line.strip()
+        with open(self.text_path, 'r', encoding='utf-8') as text_file, \
+             open(self.token_ref_path, 'r', encoding='utf-8') as token_file:
+            for line, token_line in zip(text_file, token_file):
+                ref_text = line.strip()
                 tokens = token_line.strip().replace(self.token_separator, " ").split()
                 if ref_text and tokens:
                     yield TokenRef(text=ref_text, tokens=tokens)
