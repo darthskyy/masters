@@ -5,8 +5,8 @@ from tokenizers.pre_tokenizers import PreTokenizer
 from tokenizers.processors import PostProcessor
 from tokenizers.decoders import Decoder
 from tokenizers.normalizers import Normalizer
-from tokenizers.trainers import BpeTrainer 
-from ..base import GenericTokeniser, SPECIAL_TOKENS
+from tokenizers.trainers import BpeTrainer
+from ..base import GenericTokeniser, Encoding, EncodingType, SPECIAL_TOKENS, Vocab
 from ...datasets.base import TokeniserTrainingDataset
 
 class BPEModel(GenericTokeniser):
@@ -34,7 +34,7 @@ class BPEModel(GenericTokeniser):
         pre_tokeniser: PreTokenizer | None = None,
         post_processor: PostProcessor | None = None,
         decoder: Decoder | None = None,
-        special_tokens_set: str = "default",  # Default to the 'default' set of special tokens
+        special_tokens: list[str] = SPECIAL_TOKENS["default"],
     ):
         """
         Initializes the BPEModel with optional vocabulary and merges.
@@ -47,10 +47,12 @@ class BPEModel(GenericTokeniser):
         self.tokeniser.pre_tokenizer = pre_tokeniser
         self.tokeniser.post_processor = post_processor
         self.tokeniser.decoder = decoder
-        self.special_tokens = SPECIAL_TOKENS.get(special_tokens_set, SPECIAL_TOKENS["default"])
+        self.special_tokens = special_tokens
+        self.vocab = None
         self._is_trained = self.tokeniser.get_vocab_size() > 0
         if self._is_trained:
-            self.tokeniser.add_special_tokens(SPECIAL_TOKENS[special_tokens_set])
+            self.tokeniser.add_special_tokens(special_tokens)
+            self.vocab = Vocab(self.tokeniser.get_vocab())
 
     @classmethod
     def load(cls, path: str) -> "BPEModel":
@@ -69,7 +71,8 @@ class BPEModel(GenericTokeniser):
             normaliser=tokenizer.normalizer,
             pre_tokeniser=tokenizer.pre_tokenizer,
             post_processor=tokenizer.post_processor,
-            decoder=tokenizer.decoder
+            decoder=tokenizer.decoder,
+            special_tokens=tokenizer.get_special_tokens(),
         )
     
     def save(self, path: str) -> None:
@@ -92,7 +95,10 @@ class BPEModel(GenericTokeniser):
             vocab_size (int): The size of the vocabulary to be created.
         """
         trainer = BpeTrainer(vocab_size=vocab_size)
-        self.tokeniser.train_from_iterator(dataset, trainer=trainer, special_tokens=self.special_tokens)
+        # FIXME: add special tokens to the trainer
+        self.tokeniser.add_special_tokens(self.special_tokens)
+        self.tokeniser.train_from_iterator(dataset, trainer=trainer)
+        self.vocab = Vocab(self.tokeniser.get_vocab())
         self._is_trained = True
     
     # TODO: implement the other abstract methods from GenericTokeniser
