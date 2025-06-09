@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Union
 
 from ..datasets.base import TokeniserTrainingDataset
 
@@ -76,6 +77,36 @@ class Vocab:
     def token_to_id(self) -> dict:
         return self._token_to_id.copy()
 
+class Tokenisation:
+    """
+    A simple class to represent a tokenisation operation.
+    This class is used to encapsulate the tokenised text and its corresponding IDs.
+    It provides methods to retrieve the tokenised text and the IDs of the tokens.
+
+    Attributes:
+        tokens (list[str]): The list of tokenised strings.
+        ids (list[int]): The list of IDs corresponding to the tokens.
+    """
+
+    def __init__(self, tokens: list[str], ids: list[int]):
+        self.tokens = tokens
+        self.ids = ids
+    
+    def __len__(self) -> int:
+        """Return the number of tokens in the tokenisation."""
+        return len(self.tokens)
+    
+    def __str__(self):
+        """Return a string representation of the tokenisation."""
+        return f"{self.tokens}"
+    
+
+
+# tokenisation type which supports:
+# - Tokenisation object
+# - list of strings (tokens)
+# - list of integers (IDs)
+type TokenisationType = Union[Tokenisation, list[str], list[int]]
 
 class GenericTokeniser(ABC):
     """
@@ -173,7 +204,7 @@ class GenericTokeniser(ABC):
     #     pass
     
     @abstractmethod
-    def encode(self, text: str) -> list[str]:
+    def encode(self, text: str) -> TokenisationType:
         """
         Encode the input text into tokens.
 
@@ -181,16 +212,16 @@ class GenericTokeniser(ABC):
             text (str): The input text to be encoded.
 
         Returns:
-            list[str]: A list of encoded tokens.
+            TokenisationType: A tokenisation object, a list of tokens, or a list of IDs.
         """
     
     @abstractmethod
-    def decode(self, tokens: list[str]) -> str:
+    def decode(self, tokens: TokenisationType) -> str:
         """
         Decode the list of tokens back into text.
 
         Args:
-            tokens (list[str]): The list of tokens to be decoded.
+            tokens (Union[Tokenisation, list[str], list[int]]): The tokenised input to be decoded.
 
         Returns:
             str: The decoded text.
