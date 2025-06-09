@@ -54,17 +54,23 @@ class TokeniserTrainingDataset:
     def iter_lines(self) -> Iterator[str]:
         """Iterate over all lines in all files."""
         for file_path in self.iter_files():
+            # TODO: handle posibilities of different file formats (e.g. csv, json, etc.)
             with open(file_path, 'r', encoding='utf-8') as f:
                 if self.max_lines_per_file != -1 and self.max_lines_per_file is not None:
-                    for line in f:
-                        if line.strip():  # Skip empty lines
-                            yield line.strip()
-                else:
                     for i, line in enumerate(f):
                         if i >= self.max_lines_per_file:
                             break
+                        # NOTE: should we skip empty lines
+                        # and should we yield the line as is or strip it?
+                        # right now we are stripping it and skipping empty lines
                         if line.strip():  # Skip empty lines
                             yield line.strip()
+                        # yield line
+                else:
+                    for line in f:
+                        if line.strip():  # Skip empty lines
+                            yield line.strip()
+                        # yield line
     
     def get_corpus(self) -> List[str]:
         """Return all lines as a list."""
