@@ -119,8 +119,8 @@ class GenericTokeniser(ABC):
         self.vocab = Vocab()
 
     # Abstract methods to be implemented by subclasses
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def load(cls, path: Path | str) -> "GenericTokeniser":
         """
         Load a pre-trained tokeniser from the specified path.
@@ -158,7 +158,7 @@ class GenericTokeniser(ABC):
         """
     
     @abstractmethod
-    def train(self, dataset: TokeniserTrainingDataset, **kwargs) -> None:
+    def train(self, dataset: TokeniserTrainingDataset, vocab_size: int | None = None, **kwargs) -> None:
         """
         Train the tokeniser on the provided dataset.
 
@@ -167,7 +167,18 @@ class GenericTokeniser(ABC):
             **kwargs: Additional keyword arguments for training configuration.
         """
         pass
+    
+    def train_from_file(self, path: Path | str, vocab_size: int | None = None, **kwargs) -> None:
+        """
+        Train the tokeniser from a file.
 
+        Args:
+            path (Union[str, Path]): The path to the training data file.
+            vocab_size (int, optional): The vocabulary size for the tokeniser.
+            **kwargs: Additional keyword arguments for training configuration.
+        """
+        dataset = TokeniserTrainingDataset(path=path, language_code="N/A")
+        self.train(dataset, vocab_size=vocab_size, **kwargs)
     # NOTE: Huge MAYBE here (is it necessary to have this method?)
     # @abstractmethod
     # def get_parameters(self) -> dict:
@@ -178,7 +189,7 @@ class GenericTokeniser(ABC):
     #         dict: A dictionary containing the tokeniser's parameters.
     #     """
     #     pass
-
+    
     @abstractmethod
     def encode(self, text: str) -> list[str]:
         """
