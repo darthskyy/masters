@@ -104,6 +104,12 @@ class Encoding:
         """Return a string representation of the tokenisation."""
         return f"{self.tokens}"
     
+    def __repr__(self):
+        """Return a string representation of the Encoding object."""
+        trunc_size = 5
+        tokens_repr = str(self.tokens[:trunc_size])[:-1] + ", ...]" if len(self.tokens) > trunc_size else str(self.tokens)
+        ids_repr = str(self.ids[:trunc_size])[:-1] + ", ...]" if len(self.ids) > trunc_size else str(self.ids)
+        return f"Encoding(tokens={tokens_repr}, ids={ids_repr}"
 
 
 # tokenisation type which supports:
@@ -232,7 +238,7 @@ class GenericTokeniser(ABC):
         """
     
     @abstractmethod
-    def batch_encode(self, texts: list[str]) -> list[list[str]]:
+    def batch_encode(self, texts: list[str]) -> list[EncodingType]:
         """
         Encode a batch of input texts into tokens.
 
@@ -240,20 +246,19 @@ class GenericTokeniser(ABC):
             texts (list[str]): A list of input texts to be encoded.
 
         Returns:
-            list[list[str]]: A list of lists, where each inner list contains tokens for the corresponding text.
+            list[Encoding | list[str] | list[int]]: A list of tokenisation objects, each containing tokens or IDs.
         """
         pass
 
     @abstractmethod
-    def batch_decode(self, token_batches: list[list[str]]) -> list[str]:
+    def batch_decode(self, token_batches: list[EncodingType]) -> list[str]:
         """
-        Decode a batch of token lists back into texts.
+        Decode a batch of tokenised inputs back into text.
 
         Args:
-            token_batches (list[list[str]]): A list of lists of tokens to be decoded.
-
+            token_batches (list[Encoding | list[str] | list[int]]): A list of tokenised inputs to be decoded.
         Returns:
-            list[str]: A list of decoded texts corresponding to the input token batches.
+            list[str]: A list of decoded texts.
         """
         pass
     

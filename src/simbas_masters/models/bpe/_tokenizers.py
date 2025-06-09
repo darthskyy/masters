@@ -1,5 +1,5 @@
 # from ..base import GenericTokeniser
-from tokenizers import Tokenizer
+from tokenizers import Tokenizer, pre_tokenizers, decoders, normalizers, models
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import PreTokenizer
 from tokenizers.processors import PostProcessor
@@ -102,3 +102,122 @@ class BPEModel(GenericTokeniser):
         self._is_trained = True
     
     # TODO: implement the other abstract methods from GenericTokeniser
+    # [x] encode
+    # [x] decode
+    # [x] batch_encode
+    # [x] batch_decode
+
+    def encode(self, text: str) -> Encoding:
+        """
+        Encode a string into token IDs.
+        
+        Args:
+            text (str): The input text to encode.
+        
+        Returns:
+            EncodingType: The encoded representation of the text.
+        """
+        if not self._is_trained:
+            raise ValueError("Tokeniser is not trained. Please train the tokeniser before encoding text.")
+        encoding = self.tokeniser.encode(text)
+        return Encoding(
+            ids=encoding.ids,
+            tokens=encoding.tokens,
+            offsets=encoding.offsets,
+        )
+
+    def decode(self, tokens: EncodingType) -> str:
+        """
+        Decode token IDs back into a string.
+        
+        Args:
+            tokens (Encoding | list[int] | list[str]): The tokens to decode. Can be an Encoding object, a list of integers, or a list of strings.
+        
+        Returns:
+            str: The decoded string.
+        """
+        if not self._is_trained:
+            raise ValueError("Tokeniser is not trained. Please train the tokeniser before decoding text.")
+        
+        # Determine the type of tokens and extract IDs accordingly
+        # maybe in the future we can support more types of tokens
+        if isinstance(tokens, Encoding):
+            ids = tokens.ids
+        elif isinstance(tokens, list):
+            if len(tokens) == 0:
+                return ""
+            elif isinstance(tokens[0], int):
+                ids = tokens
+            elif isinstance(tokens[0], str):
+                ids = self.get_ids(tokens)
+        else:
+            raise TypeError("tokens must be an instance of Encoding or a list of integers or strings.")
+        
+        return self.tokeniser.decode(ids)
+
+    def batch_encode(self, texts: list[str]) -> list[Encoding]:
+        """
+        Encode a list of strings into token IDs.
+        
+        Args:
+            texts (list[str]): The input texts to encode.
+        
+        Returns:
+            list[Encoding]: A list of Encodings for each input text.
+        """
+        if not self._is_trained:
+            raise ValueError("Tokeniser is not trained. Please train the tokeniser before encoding text.")
+        
+        # using encode_batch_fast for better performance
+        # encodings = self.tokeniser.encode_batch_fast(texts)
+        # result = [
+        #     Encoding(
+        #         ids=encoding.ids,
+        #         tokens=self.get_tokens(encoding.ids),
+        #     ) for encoding in encodings
+        # ]
+
+        # for now we are doing batch decoding slow
+        encodings = self.tokeniser.encode_batch(texts)
+        result = [
+            Encoding(
+                ids=encoding.ids,
+                tokens=encoding.tokens,
+                offsets=encoding.offsets,
+            ) for encoding in encodings
+        ]
+        
+        return result
+
+    def batch_decode(self, token_batches: list[EncodingType]) -> list[str]:
+        """
+        Decode a list of token IDs back into strings.
+        
+        Args:
+            token_batches (list[Encoding | list[int] | list[str]]): A list of token batches to decode. Each batch can be an Encoding object, a list of integers, or a list of strings.
+            All elements in the list should be of the same type.
+        
+        Returns:
+            list[str]: A list of decoded strings.
+        """
+        if not self._is_trained:
+            raise ValueError("Tokeniser is not trained. Please train the tokeniser before decoding text.")
+        if not token_batches:
+            return []
+        # Determine the type of tokens and extract IDs accordingly
+        if isinstance(token_batches[0], Encoding):
+            ids_batches = [encoding.ids for encoding in token_batches]
+        elif isinstance(token_batches[0], list):
+            if len(token_batches[0]) == 0:
+                return []
+            elif isinstance(token_batches[0][0], int):
+                ids_batches = token_batches
+            elif isinstance(token_batches[0][0], str):
+                ids_batches = [self.get_ids(t) for t in token_batches]
+            else:
+                raise TypeError("tokens must be a list of Encoding, a list of lists of integers, or a list of lists of strings.")
+        else:
+            raise TypeError("tokens must be a list of Encoding, a list of lists of integers, or a list of lists of strings.")
+        
+        # still thinking about what to do with special tokens
+        return self.tokeniser.decode_batch(ids_batches)
