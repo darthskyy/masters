@@ -263,6 +263,51 @@ class GenericTokeniser(ABC):
         pass
     
     # Concrete methods
+    def tokenise(self, text: str, separator: str = " ") -> str:
+        """
+        Tokenise the input text.
+
+        Args:
+            text (str): The input text to be tokenised.
+
+        Returns:
+            str: A string of tokenised text.
+        """
+        if not self.is_trained():
+            raise ValueError("The tokeniser has not been trained yet.")
+        
+        tokens = self.encode(text)
+        if isinstance(tokens, Encoding):
+            tokens = tokens.tokens
+        elif isinstance(tokens, list):
+            if all(isinstance(token, str) for token in tokens):
+                pass # If tokens are strings, do nothing
+            elif all(isinstance(token, int) for token in tokens):
+                # If tokens are IDs, convert them to strings
+                tokens = self.get_tokens(tokens)
+            else:
+                raise TypeError("Unexpected type in the list of tokens. All elements should be either strings or integers.")
+        else:
+            raise TypeError("Unexpected type returned by encode method.")
+        
+        return separator.join(tokens)
+    
+    def batch_tokenise(self, texts: list[str], separator: str = " ") -> list[str]:
+        """
+        Tokenise a batch of input texts.
+
+        Args:
+            texts (list[str]): A list of input texts to be tokenised.
+
+        Returns:
+            list[str]: A list of tokenised strings.
+        """
+        if not self.is_trained():
+            raise ValueError("The tokeniser has not been trained yet.")
+        
+        token_batches = self.batch_encode(texts)
+        return [self.tokenise(text, separator) for text in token_batches]
+
     def is_trained(self) -> bool:
         """
         Check if the tokeniser has been trained.
