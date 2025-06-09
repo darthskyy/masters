@@ -25,6 +25,11 @@ SUPPORTED_ALGORITHMS = {
         ),
 }
 
+SPECIAL_TOKENS = {
+    "minimal": ["<unk>", "<pad>"],
+    "default": ["<unk>", "<pad>", "<s>", "</s>", "<mask>"],
+    "extended": ["<unk>", "<pad>", "<s>", "</s>", "<mask>", "<cls>", "<sep>"],
+}
 class Vocab:
     """
     A simple vocabulary wrapper that maps tokens to IDs and vice versa.
@@ -144,18 +149,6 @@ class GenericTokeniser(ABC):
             path (Union[str, Path]): The path where the tokeniser will be saved.
         """
         pass
-
-    @abstractmethod
-    def __call__(self, text: str) -> list[str]:
-        """
-        Tokenise the input text.
-
-        Args:
-            text (str): The input text to be tokenised.
-
-        Returns:
-            list[str]: A list of tokens.
-        """
     
     @abstractmethod
     def train(self, dataset: TokeniserTrainingDataset, vocab_size: int | None = None, **kwargs) -> None:
@@ -168,17 +161,6 @@ class GenericTokeniser(ABC):
         """
         pass
     
-    def train_from_file(self, path: Path | str, vocab_size: int | None = None, **kwargs) -> None:
-        """
-        Train the tokeniser from a file.
-
-        Args:
-            path (Union[str, Path]): The path to the training data file.
-            vocab_size (int, optional): The vocabulary size for the tokeniser.
-            **kwargs: Additional keyword arguments for training configuration.
-        """
-        dataset = TokeniserTrainingDataset(path=path, language_code="N/A")
-        self.train(dataset, vocab_size=vocab_size, **kwargs)
     # NOTE: Huge MAYBE here (is it necessary to have this method?)
     # @abstractmethod
     # def get_parameters(self) -> dict:
@@ -250,6 +232,33 @@ class GenericTokeniser(ABC):
         """
         return self._is_trained
     
+    def __call__(self, text: str) -> list[str]:
+        """
+        Tokenise the input text.
+
+        Args:
+            text (str): The input text to be tokenised.
+
+        Returns:
+            list[str]: A list of tokens.
+        """
+        if not self.is_trained():
+            raise ValueError("The tokeniser has not been trained yet.")
+        
+        return self.encode(text)
+    
+    def train_from_file(self, path: Path | str, vocab_size: int | None = None, **kwargs) -> None:
+        """
+        Train the tokeniser from a file.
+
+        Args:
+            path (Union[str, Path]): The path to the training data file.
+            vocab_size (int, optional): The vocabulary size for the tokeniser.
+            **kwargs: Additional keyword arguments for training configuration.
+        """
+        dataset = TokeniserTrainingDataset(path=path, language_code="N/A")
+        self.train(dataset, vocab_size=vocab_size, **kwargs)
+        
     def get_vocab(self) -> Vocab:
         """
         Get the vocabulary of the tokeniser.
