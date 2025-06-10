@@ -1,4 +1,5 @@
-# from ..base import GenericTokeniser
+from pathlib import Path
+
 from tokenizers import Tokenizer, pre_tokenizers, decoders, normalizers, models
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import PreTokenizer
@@ -75,16 +76,25 @@ class BPEModel(GenericTokeniser):
             special_tokens=tokenizer.get_special_tokens(),
         )
     
-    def save(self, path: str) -> None:
+    def save(self, path: Path | str) -> None:
         """
         Save the BPE tokeniser to the specified path.
         
         Args:
             path (str): The path where the tokeniser will be saved.
         """
-        # TODO: implement a saving method that saves in a consistent format over all tokenisers
+        if not self._is_trained:
+            raise ValueError("Tokeniser is not trained. Please train the tokeniser before saving.")
+        if self.vocab is None:
+            self.vocab = Vocab(self.tokeniser.get_vocab())
+
+        path = path if path.endswith(".json") else f"{path}.json"
+        path = Path(path)
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
         
-        self.tokeniser.save(path)
+        # TODO: implement a saving method that saves in a consistent format over all tokenisers
+        self.tokeniser.save(path.as_posix())
 
     def train(self, dataset: TokeniserTrainingDataset, vocab_size: int = 30000) -> None:
         """
