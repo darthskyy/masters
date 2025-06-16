@@ -12,7 +12,7 @@ from tktkt.models.bpe.knockout import CONFIGS
 from tktkt.models.bpe.knockout import BPEKnockout
 from tktkt.preparation.boundaries import BoundaryMarker, BoundaryMarkerLocation
 
-from sadilar_morph import SadilarMorphDataset_Surface
+from .sadilar_morph import SadilarMorphDataset_Surface
 
 LINEAR_WEIGHTER  = lambda f: f # redefining the reweighter function here for clarity, as it is used in the project config.
 

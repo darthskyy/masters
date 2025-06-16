@@ -8,7 +8,7 @@ from tktkt.interfaces.preparation import Preprocessor, Pretokeniser, TextMapper
 from tktkt.models.bpe.knockout import BPEKnockout
 from tktkt.preparation.boundaries import BoundaryMarker, BoundaryMarkerLocation
 
-import sadilar_config
+from . import sadilar_config
 # NOTE You must ALWAYS add your custom configurations to the CONFIGS dictionary.
 # mine are added in sadilar_config.py when I import it.
 
