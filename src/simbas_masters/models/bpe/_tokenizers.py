@@ -67,13 +67,16 @@ class BPEModel(GenericTokeniser):
             BPEModel: An instance of the BPEModel.
         """
         tokenizer = Tokenizer.from_file(path)
+        if not isinstance(tokenizer.model, BPE):
+            raise ValueError(f"Expected a BPE model, but got {type(tokenizer.model)}.")
+        special_tokens = [item.content for _, item in tokenizer.get_added_tokens_decoder().items()]
         return cls(
             model=tokenizer.model,
             normaliser=tokenizer.normalizer,
             pre_tokeniser=tokenizer.pre_tokenizer,
             post_processor=tokenizer.post_processor,
             decoder=tokenizer.decoder,
-            special_tokens=tokenizer.get_special_tokens(),
+            special_tokens=special_tokens,
         )
     
     def save(self, path: Path | str) -> None:
@@ -96,7 +99,7 @@ class BPEModel(GenericTokeniser):
         # TODO: implement a saving method that saves in a consistent format over all tokenisers
         self.tokeniser.save(path.as_posix())
 
-    def train(self, dataset: TokeniserTrainingDataset, vocab_size: int = 30000) -> None:
+    def train(self, dataset: TokeniserTrainingDataset, vocab_size: int = 30000, **kwargs) -> None:
         """
         Train the BPE tokeniser on the provided dataset.
         
@@ -104,7 +107,7 @@ class BPEModel(GenericTokeniser):
             dataset (TokeniserTrainingDataset): The dataset to train the tokeniser on.
             vocab_size (int): The size of the vocabulary to be created.
         """
-        trainer = BpeTrainer(vocab_size=vocab_size)
+        trainer = BpeTrainer(vocab_size=vocab_size, special_tokens=self.special_tokens, **kwargs)
         # FIXME: add special tokens to the trainer
         self.tokeniser.add_special_tokens(self.special_tokens)
         self.tokeniser.train_from_iterator(dataset, trainer=trainer)
