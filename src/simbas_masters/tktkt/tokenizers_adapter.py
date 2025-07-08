@@ -182,7 +182,7 @@ class TokenizersPreprocessor(Preprocessor):
         return cls.from_tokeniser(tokeniser)
 
 ## FUNCTIONS
-def detectBoundaryMarkerFromTokeniser(tokeniser: Tokenizer) -> BoundaryMarker:
+def detectBoundaryMarkerFromTokeniser(tokeniser: Tokenizer | Preprocessor) -> BoundaryMarker:
     """
     Copied from `tktkt.preparation.boundaries.detectBoundaryMarkerFromTokeniser`.
     Just changed the tokeniser from `hf_tokeniser` to `tokeniser`.
@@ -190,12 +190,25 @@ def detectBoundaryMarkerFromTokeniser(tokeniser: Tokenizer) -> BoundaryMarker:
     CHAR = "a"
     N = 50
 
-    token_with_potential_prefix = tokeniser.encode(" " + CHAR*N).tokens[0]
+
+    if isinstance(tokeniser, Tokenizer):
+        # if the tokeniser is p
+        if tokeniser.get_vocab_size() == 0:
+            get_first_token = lambda x: tokeniser.encode(x).tokens[0]
+            get_last_token = lambda x: tokeniser.encode(x).tokens[-1]
+    elif isinstance(tokeniser, Preprocessor):
+        get_first_token = lambda x: tokeniser.do(x)[0]
+        get_last_token = lambda x: tokeniser.do(x)[-1]
+    else:
+        raise TypeError(f"Expected a Tokenizer or Preprocessor, but got {type(tokeniser)}.")
+    
+    token_with_potential_prefix = get_first_token(" " + CHAR*N)
     if CHAR in token_with_potential_prefix and token_with_potential_prefix.rstrip(CHAR) and token_with_potential_prefix != token_with_potential_prefix.rstrip(CHAR):
         prefix = token_with_potential_prefix.rstrip(CHAR)
         return BoundaryMarker(prefix, detached=True, location=BoundaryMarkerLocation.START)
 
-    token_with_potential_suffix = tokeniser.encode(CHAR*N + " ").tokens[-1]
+    
+    token_with_potential_suffix = get_last_token(" " + CHAR*N)
     if CHAR in token_with_potential_suffix and token_with_potential_suffix.lstrip(CHAR) and token_with_potential_suffix != token_with_potential_suffix.lstrip(CHAR):
         suffix = token_with_potential_suffix.lstrip(CHAR)
         return BoundaryMarker(suffix, detached=True, location=BoundaryMarkerLocation.END)
